@@ -169,7 +169,18 @@ export const db = {
   },
   init: initialiseSqlite,
   initPostgres: async (): Promise<void> => {
-    if (pool) await pool.query(postgresSchema);
+    if (!pool) return;
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await pool.query(postgresSchema);
+        return;
+      } catch (error) {
+        lastError = error;
+        if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+      }
+    }
+    throw lastError;
   },
   isPostgres: Boolean(pool),
 };
