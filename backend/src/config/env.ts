@@ -15,20 +15,16 @@ const numberFrom = (value: string | undefined, fallback: number): number => {
 
 const isVercel = Boolean(process.env.VERCEL);
 const defaultDbPath = isVercel ? '/tmp/dreamers-church.db' : './data/church.db';
+const configuredDbPath = process.env.DB_PATH ?? defaultDbPath;
+const configuredUploadDir = process.env.UPLOAD_DIR ?? (isVercel ? '/tmp/dreamers-church-uploads' : 'uploads');
 
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   isProduction: process.env.NODE_ENV === 'production',
   port: numberFrom(process.env.PORT, 4000),
   databaseUrl: process.env.DATABASE_URL ?? '',
-  dbPath: path.isAbsolute(process.env.DB_PATH ?? defaultDbPath)
-    ? (process.env.DB_PATH as string)
-    : path.join(backendRoot, process.env.DB_PATH ?? defaultDbPath),
-  uploadDir: path.isAbsolute(process.env.UPLOAD_DIR ?? '')
-    ? (process.env.UPLOAD_DIR as string)
-    : isVercel
-      ? '/tmp/dreamers-church-uploads'
-      : path.join(backendRoot, 'uploads'),
+  dbPath: path.isAbsolute(configuredDbPath) ? configuredDbPath : path.join(backendRoot, configuredDbPath),
+  uploadDir: path.isAbsolute(configuredUploadDir) ? configuredUploadDir : path.join(backendRoot, configuredUploadDir),
   publicDir: path.join(projectRoot, 'frontend', 'dist'),
   frontendPublicDir: path.join(projectRoot, 'frontend', 'public'),
   sessionSecret: process.env.SESSION_SECRET ?? 'development-only-session-secret-change-me',
