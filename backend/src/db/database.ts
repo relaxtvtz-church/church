@@ -5,8 +5,10 @@ import { env } from '../config/env.js';
 import { postgresSchema } from './postgresSchema.js';
 import { schema } from './schema.js';
 
-fs.mkdirSync(path.dirname(env.dbPath), { recursive: true });
-fs.mkdirSync(path.join(path.dirname(env.dbPath), '..', 'uploads'), { recursive: true });
+if (!env.databaseUrl) {
+  fs.mkdirSync(path.dirname(env.dbPath), { recursive: true });
+  fs.mkdirSync(env.uploadDir, { recursive: true });
+}
 
 let sqlite: any = null;
 const pool = env.databaseUrl
