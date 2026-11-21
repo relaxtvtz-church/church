@@ -1,0 +1,20 @@
+/** Brand colours used in generated PDFs — synced with the studio palette and frontend CSS. */
+export const theme = {
+  primary: '#1A6BC4',
+  secondary: '#C8960C',
+  dark: '#0A2A6E',
+  white: '#FFFFFF',
+  background: '#FAF6EC',
+  muted: '#5C6B86',
+  border: '#E3E8F0',
+  track: '#E8EDF4',
+  emptyStar: '#D8DEE8',
+  tableHeader: '#E8F1FA',
+  rowAlt: '#F7F3E9',
+  ink2: '#0E2255',
+  navy: '#143780',
+  goldSoft: '#F0C040',
+  goldDeep: '#8B6708',
+  cream: '#F5EFE0',
+  paper: '#FAF6EC',
+} as const;

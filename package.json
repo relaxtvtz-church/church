@@ -1,0 +1,21 @@
+{
+  "name": "dreamers-centre-fellowship",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Ministry Review Portal for The Dreamers Centre Fellowship",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,green \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\"",
+    "build": "npm run build --workspace frontend",
+    "start": "npm run start --workspace backend",
+    "setup": "npm run db:seed --workspace backend",
+    "seed:demo": "npm run seed:demo --workspace backend",
+    "db:reset": "npm run db:reset --workspace backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

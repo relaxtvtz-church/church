@@ -1,0 +1,191 @@
+@import 'tailwindcss';
+
+:root {
+  /* Synced with the brand palette in dreamers-centre-studio.html */
+  --ink: #0A2A6E;
+  --ink-2: #0E2255;
+  --navy: #143780;
+  --eagle: #1A6BC4;
+  --gold: #C8960C;
+  --gold-soft: #F0C040;
+  --gold-deep: #8B6708;
+  --cream: #F5EFE0;
+  --paper: #FAF6EC;
+
+  --primary: var(--eagle);
+  --secondary: var(--gold);
+  --dark: var(--ink);
+  --white: #FFFFFF;
+  --background: var(--paper);
+}
+
+:root {
+  --primary-dark: var(--navy);
+  --primary-soft: #E8F1FA;
+  --muted: #5C6B86;
+  --line: #E3E8F0;
+}
+
+@theme {
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-dark: var(--dark);
+  --color-white: var(--white);
+  --color-background: var(--background);
+
+  --color-brand: var(--primary);
+  --color-brand-dark: var(--primary-dark);
+  --color-brand-soft: var(--primary-soft);
+  --color-ink: var(--ink);
+  --color-gold: var(--secondary);
+  --color-soft: var(--background);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+
+  --color-ink-2: var(--ink-2);
+  --color-navy: var(--navy);
+  --color-eagle: var(--eagle);
+  --color-gold-soft: var(--gold-soft);
+  --color-gold-deep: var(--gold-deep);
+  --color-cream: var(--cream);
+  --color-paper: var(--paper);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --shadow-card: 0 1px 2px rgb(10 42 110 / 4%), 0 8px 24px rgb(10 42 110 / 3%);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes float-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-white text-ink font-sans antialiased;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand;
+  }
+
+  ::selection {
+    background: var(--primary-soft);
+  }
+}
+
+@layer utilities {
+  .card {
+    @apply rounded-2xl border border-line bg-white shadow-card;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70 transition-colors duration-200 focus:border-brand focus:ring-2 focus:ring-brand/15 focus:outline-none;
+  }
+
+  .label {
+    @apply mb-1.5 block text-[13px] font-semibold text-ink;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+
+  .select-field {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235C6B86' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 16px;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .animate-fade-up {
+    animation: fade-up 0.65s cubic-bezier(0.22, 0.7, 0.25, 1) both;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.5s ease-out both;
+  }
+
+  .animate-float {
+    animation: float-soft 6s ease-in-out infinite;
+  }
+
+  .animate-pop {
+    animation: pop-in 0.4s cubic-bezier(0.22, 0.7, 0.25, 1) both;
+  }
+
+  .hover-lift {
+    transition:
+      transform 0.25s ease,
+      box-shadow 0.25s ease,
+      border-color 0.25s ease;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 14px 36px rgb(10 42 110 / 8%);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-fade-up,
+    .animate-fade-in,
+    .animate-float,
+    .animate-pop {
+      animation: none;
+    }
+  }
+}
