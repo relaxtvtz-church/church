@@ -3,7 +3,7 @@
   "framework": "vite",
   "buildCommand": "npm run vercel-build",
   "outputDirectory": "frontend/dist",
-  "installCommand": "npm install",
+  "installCommand": "npm install --ignore-scripts",
   "functions": {
     "api/index.mjs": {
       "maxDuration": 60

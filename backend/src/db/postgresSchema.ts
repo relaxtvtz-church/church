@@ -110,4 +110,5 @@ CREATE INDEX IF NOT EXISTS idx_reviews_rating ON reviews(rating);
 CREATE INDEX IF NOT EXISTS idx_staff_status ON staff(status);
 CREATE INDEX IF NOT EXISTS idx_registrations_created_at ON registrations(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_admin_id ON sessions(admin_id);
 `;

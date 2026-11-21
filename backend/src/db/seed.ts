@@ -25,6 +25,7 @@ const seedDepartments = async (): Promise<void> => {
 
 export const seed = async (): Promise<void> => {
   if (db.isPostgres) await db.initPostgres();
+  else await db.init();
   await seedDepartments();
 
   const adminCount = (await db.prepare('SELECT COUNT(*) AS count FROM admins').get()) as { count: number };
