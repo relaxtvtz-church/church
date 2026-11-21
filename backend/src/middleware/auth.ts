@@ -20,52 +20,53 @@ const cookieOptions = {
   maxAge: TTL_MS,
 };
 
-export const createSession = (res: Response, adminId: number, remember = false): void => {
+export const createSession = async (res: Response, adminId: number, remember = false): Promise<void> => {
   const token = crypto.randomBytes(32).toString('hex');
   const ttl = remember ? TTL_MS * 30 : TTL_MS;
   const expiresAt = new Date(Date.now() + ttl).toISOString();
-  db.prepare('INSERT INTO sessions (token_hash, admin_id, created_at, expires_at) VALUES (?, ?, ?, ?)').run(
-    hashToken(token),
-    adminId,
-    now(),
-    expiresAt,
-  );
+  await db
+    .prepare('INSERT INTO sessions (token_hash, admin_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
+    .run(hashToken(token), adminId, now(), expiresAt);
   res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ttl });
 };
 
-export const destroySession = (req: Request, res: Response): void => {
+export const destroySession = async (req: Request, res: Response): Promise<void> => {
   const token = req.cookies?.[COOKIE_NAME];
   if (typeof token === 'string') {
-    db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hashToken(token));
+    await db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hashToken(token));
   }
   res.clearCookie(COOKIE_NAME, { path: '/' });
 };
 
-export const attachAdmin = (req: Request, _res: Response, next: NextFunction): void => {
-  const token = req.cookies?.[COOKIE_NAME];
-  if (typeof token === 'string' && token.length === 64) {
-    const session = db
-      .prepare(
-        `SELECT s.admin_id, a.name, a.email, a.role, s.expires_at
-         FROM sessions s JOIN admins a ON a.id = s.admin_id
-         WHERE s.token_hash = ?`,
-      )
-      .get(hashToken(token)) as SessionRow | undefined;
+export const attachAdmin = async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const token = req.cookies?.[COOKIE_NAME];
+    if (typeof token === 'string' && token.length === 64) {
+      const session = (await db
+        .prepare(
+          `SELECT s.admin_id, a.name, a.email, a.role, s.expires_at
+           FROM sessions s JOIN admins a ON a.id = s.admin_id
+           WHERE s.token_hash = ?`,
+        )
+        .get(hashToken(token))) as SessionRow | undefined;
 
-    if (session) {
-      if (new Date(session.expires_at).getTime() > Date.now()) {
-        req.admin = {
-          id: session.admin_id,
-          name: session.name,
-          email: session.email,
-          role: session.role,
-        };
-      } else {
-        db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hashToken(token));
+      if (session) {
+        if (new Date(session.expires_at).getTime() > Date.now()) {
+          req.admin = {
+            id: Number(session.admin_id),
+            name: session.name,
+            email: session.email,
+            role: session.role,
+          };
+        } else {
+          await db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hashToken(token));
+        }
       }
     }
+    next();
+  } catch (error) {
+    next(error);
   }
-  next();
 };
 
 export const requireAuth = (req: Request, _res: Response, next: NextFunction): void => {

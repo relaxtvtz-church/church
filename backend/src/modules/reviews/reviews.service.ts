@@ -24,6 +24,15 @@ export interface ReviewRow {
   position?: string | null;
 }
 
+const num = (value: unknown): number => Number(value ?? 0);
+
+const normalizeReview = (row: ReviewRow): ReviewRow => ({
+  ...row,
+  id: num(row.id),
+  staff_id: row.staff_id === null || row.staff_id === undefined ? null : num(row.staff_id),
+  rating: num(row.rating),
+});
+
 export const buildFilterClause = (filters: ReviewFilters, alias = 'r'): { clause: string; params: unknown[] } => {
   const parts: string[] = [];
   const params: unknown[] = [];
@@ -64,14 +73,14 @@ export const buildFilterClause = (filters: ReviewFilters, alias = 'r'): { clause
   return { clause: parts.length ? `WHERE ${parts.join(' AND ')}` : '', params };
 };
 
-export const listReviews = (
+export const listReviews = async (
   filters: ReviewFilters,
   options: { page?: number; limit?: number } = {},
-): { rows: ReviewRow[]; total: number } => {
+): Promise<{ rows: ReviewRow[]; total: number }> => {
   const { clause, params } = buildFilterClause(filters);
-  const total = (
-    db.prepare(`SELECT COUNT(*) AS count FROM reviews r ${clause}`).get(...params) as { count: number }
-  ).count;
+  const totalRow = (await db.prepare(`SELECT COUNT(*) AS count FROM reviews r ${clause}`).get(...params)) as {
+    count: number;
+  };
 
   let sql = `SELECT r.*, s.position FROM reviews r LEFT JOIN staff s ON s.id = r.staff_id ${clause} ORDER BY r.created_at DESC`;
   const queryParams = [...params];
@@ -80,36 +89,39 @@ export const listReviews = (
     sql += ' LIMIT ? OFFSET ?';
     queryParams.push(options.limit, (page - 1) * options.limit);
   }
-  return { rows: db.prepare(sql).all(...queryParams) as ReviewRow[], total };
+  const rows = (await db.prepare(sql).all(...queryParams)) as ReviewRow[];
+  return { rows: rows.map(normalizeReview), total: num(totalRow.count) };
 };
 
-export const getReview = (id: number): ReviewRow | undefined =>
-  db
+export const getReview = async (id: number): Promise<ReviewRow | undefined> => {
+  const row = (await db
     .prepare('SELECT r.*, s.position FROM reviews r LEFT JOIN staff s ON s.id = r.staff_id WHERE r.id = ?')
-    .get(id) as ReviewRow | undefined;
+    .get(id)) as ReviewRow | undefined;
+  return row ? normalizeReview(row) : undefined;
+};
 
-export const getOverviewStats = () => {
-  const totals = db
+export const getOverviewStats = async () => {
+  const totals = (await db
     .prepare(
       `SELECT COUNT(*) AS total,
               ROUND(AVG(CASE WHEN status != 'archived' THEN rating END), 1) AS average,
               SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS this_month
        FROM reviews`,
     )
-    .get(new Date(new Date().setDate(1)).toISOString()) as {
+    .get(new Date(new Date().setDate(1)).toISOString())) as {
     total: number;
     average: number | null;
     this_month: number | null;
   };
 
-  const activeStaff = (
-    db.prepare("SELECT COUNT(*) AS count FROM staff WHERE status = 'active'").get() as { count: number }
-  ).count;
+  const activeStaff = ((await db.prepare("SELECT COUNT(*) AS count FROM staff WHERE status = 'active'").get()) as {
+    count: number;
+  }).count;
 
-  const distribution = db
+  const distribution = (await db
     .prepare('SELECT rating, COUNT(*) AS count FROM reviews WHERE status != ? GROUP BY rating ORDER BY rating')
-    .all('archived') as { rating: number; count: number }[];
-  const distMap = new Map(distribution.map((row) => [row.rating, row.count]));
+    .all('archived')) as { rating: number; count: number }[];
+  const distMap = new Map(distribution.map((row) => [num(row.rating), num(row.count)]));
 
   const monthLabels: string[] = [];
   const monthKeys: string[] = [];
@@ -119,16 +131,16 @@ export const getOverviewStats = () => {
     monthKeys.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
     monthLabels.push(date.toLocaleDateString('en-GB', { month: 'short' }));
   }
-  const monthlyRows = db
+  const monthlyRows = (await db
     .prepare("SELECT strftime('%Y-%m', created_at) AS month, COUNT(*) AS count FROM reviews GROUP BY month")
-    .all() as { month: string; count: number }[];
-  const monthlyMap = new Map(monthlyRows.map((row) => [row.month, row.count]));
+    .all()) as { month: string; count: number }[];
+  const monthlyMap = new Map(monthlyRows.map((row) => [String(row.month), num(row.count)]));
 
   return {
-    totalReviews: totals.total,
-    averageRating: totals.average ?? 0,
-    reviewsThisMonth: totals.this_month ?? 0,
-    activeStaff,
+    totalReviews: num(totals.total),
+    averageRating: totals.average === null || totals.average === undefined ? 0 : num(totals.average),
+    reviewsThisMonth: num(totals.this_month),
+    activeStaff: num(activeStaff),
     distribution: [1, 2, 3, 4, 5].map((rating) => ({ rating, count: distMap.get(rating) ?? 0 })),
     submissions: monthKeys.map((key, index) => ({
       month: monthLabels[index],
@@ -137,8 +149,8 @@ export const getOverviewStats = () => {
   };
 };
 
-export const getStaffRatings = () =>
-  db
+export const getStaffRatings = async () =>
+  ((await db
     .prepare(
       `SELECT s.id, s.full_name, s.position, s.photo_url, s.status,
               COUNT(r.id) AS total_reviews,
@@ -148,7 +160,7 @@ export const getStaffRatings = () =>
        GROUP BY s.id
        ORDER BY average_rating DESC, total_reviews DESC, s.full_name ASC`,
     )
-    .all() as {
+    .all()) as {
     id: number;
     full_name: string;
     position: string;
@@ -156,19 +168,34 @@ export const getStaffRatings = () =>
     status: string;
     total_reviews: number;
     average_rating: number | null;
-  }[];
+  }[]).map((row) => ({
+    ...row,
+    id: num(row.id),
+    total_reviews: num(row.total_reviews),
+    average_rating: row.average_rating === null || row.average_rating === undefined ? null : num(row.average_rating),
+  }));
 
-export const getGeneralFeedbackStats = () =>
-  db
+export const getGeneralFeedbackStats = async () => {
+  const row = (await db
     .prepare(
       `SELECT COUNT(*) AS total_reviews, ROUND(AVG(rating), 1) AS average_rating
        FROM reviews WHERE staff_id IS NULL AND status != 'archived'`,
     )
-    .get() as { total_reviews: number; average_rating: number | null };
+    .get()) as { total_reviews: number; average_rating: number | null };
+  return {
+    total_reviews: num(row.total_reviews),
+    average_rating: row.average_rating === null || row.average_rating === undefined ? null : num(row.average_rating),
+  };
+};
 
-export const getCategorySummary = (filters: ReviewFilters) => {
+export const getCategorySummary = async (filters: ReviewFilters) => {
   const { clause, params } = buildFilterClause(filters);
-  return db
+  const rows = (await db
     .prepare(`SELECT category, COUNT(*) AS count, ROUND(AVG(rating), 1) AS average FROM reviews r ${clause} GROUP BY category ORDER BY count DESC`)
-    .all(...params) as { category: string; count: number; average: number | null }[];
+    .all(...params)) as { category: string; count: number; average: number | null }[];
+  return rows.map((row) => ({
+    ...row,
+    count: num(row.count),
+    average: row.average === null || row.average === undefined ? null : num(row.average),
+  }));
 };

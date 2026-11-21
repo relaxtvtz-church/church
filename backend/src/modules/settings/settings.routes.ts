@@ -9,8 +9,8 @@ import { cleanText } from '../../utils/sanitize.js';
 
 export const settingsRouter = Router();
 
-export const getSettingsRow = () =>
-  db.prepare('SELECT * FROM church_settings WHERE id = 1').get() as {
+export const getSettingsRow = async () =>
+  (await db.prepare('SELECT * FROM church_settings WHERE id = 1').get()) as {
     id: number;
     church_name: string;
     logo_url: string | null;
@@ -48,17 +48,20 @@ const publicFields = [
   'youtube_url',
 ] as const;
 
-settingsRouter.get('/public', (_req, res) => {
-  const settings = getSettingsRow();
-  res.json(Object.fromEntries(publicFields.map((field) => [field, settings[field]])));
-});
+settingsRouter.get(
+  '/public',
+  asyncHandler(async (_req, res) => {
+    const settings = await getSettingsRow();
+    res.json(Object.fromEntries(publicFields.map((field) => [field, settings[field]])));
+  }),
+);
 
 settingsRouter.use(requireAuth);
 
 settingsRouter.get(
   '/',
-  asyncHandler((_req, res) => {
-    res.json({ settings: getSettingsRow() });
+  asyncHandler(async (_req, res) => {
+    res.json({ settings: await getSettingsRow() });
   }),
 );
 
@@ -87,36 +90,38 @@ const settingsSchema = z.object({
 settingsRouter.put(
   '/',
   validate(settingsSchema),
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const input = req.body as z.infer<typeof settingsSchema>;
-    const settings = getSettingsRow();
+    const settings = await getSettingsRow();
     if (!settings) notFound('Church settings not found.');
 
     const logoUrl = input.logoUrl ?? null;
-    db.prepare(
-      `UPDATE church_settings SET church_name = ?, logo_url = ?, location = ?, phone = ?, email = ?,
-       welcome_message = ?, feedback_intro = ?, footer_text = ?, service_info = ?, map_lat = ?, map_lng = ?,
-       instagram_url = ?, tiktok_url = ?, facebook_url = ?, youtube_url = ?, updated_at = ? WHERE id = 1`,
-    ).run(
-      cleanText(input.churchName, 150),
-      logoUrl,
-      cleanText(input.location, 250),
-      cleanText(input.phone, 40),
-      cleanText(input.email, 150),
-      cleanText(input.welcomeMessage, 1000),
-      cleanText(input.feedbackIntro, 1000),
-      cleanText(input.footerText, 500),
-      cleanText(input.serviceInfo, 500),
-      cleanText(input.mapLat, 30),
-      cleanText(input.mapLng, 30),
-      cleanText(input.instagramUrl, 250),
-      cleanText(input.tiktokUrl, 250),
-      cleanText(input.facebookUrl, 250),
-      cleanText(input.youtubeUrl, 250),
-      now(),
-    );
+    await db
+      .prepare(
+        `UPDATE church_settings SET church_name = ?, logo_url = ?, location = ?, phone = ?, email = ?,
+         welcome_message = ?, feedback_intro = ?, footer_text = ?, service_info = ?, map_lat = ?, map_lng = ?,
+         instagram_url = ?, tiktok_url = ?, facebook_url = ?, youtube_url = ?, updated_at = ? WHERE id = 1`,
+      )
+      .run(
+        cleanText(input.churchName, 150),
+        logoUrl,
+        cleanText(input.location, 250),
+        cleanText(input.phone, 40),
+        cleanText(input.email, 150),
+        cleanText(input.welcomeMessage, 1000),
+        cleanText(input.feedbackIntro, 1000),
+        cleanText(input.footerText, 500),
+        cleanText(input.serviceInfo, 500),
+        cleanText(input.mapLat, 30),
+        cleanText(input.mapLng, 30),
+        cleanText(input.instagramUrl, 250),
+        cleanText(input.tiktokUrl, 250),
+        cleanText(input.facebookUrl, 250),
+        cleanText(input.youtubeUrl, 250),
+        now(),
+      );
 
-    if (settings.logo_url && settings.logo_url !== logoUrl) removeImage(settings.logo_url);
-    res.json({ message: 'Church information saved.', settings: getSettingsRow() });
+    if (settings.logo_url && settings.logo_url !== logoUrl) await removeImage(settings.logo_url);
+    res.json({ message: 'Church information saved.', settings: await getSettingsRow() });
   }),
 );

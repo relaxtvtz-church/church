@@ -41,9 +41,9 @@ registrationRouter.post(
   '/',
   rateLimit('registration-submit', 5, 30 * 60 * 1000),
   validate(registrationSchema),
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const input = req.body as z.infer<typeof registrationSchema>;
-    const result = db
+    const result = await db
       .prepare(
         `INSERT INTO registrations (full_name, parent_name, email, phone, guardian_phone, location, status,
          studying_at, university, comments, created_at)
@@ -74,7 +74,7 @@ registrationRouter.use(requireAuth);
 
 registrationRouter.get(
   '/',
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const rawSearch = typeof req.query.search === 'string' ? req.query.search : '';
     const search = cleanText(rawSearch, 120);
     const page = Math.max(1, Number(req.query.page) || 1);
@@ -87,13 +87,14 @@ registrationRouter.get(
       : '';
     const params = search ? { search: `%${search}%` } : {};
 
-    const total = (
-      db.prepare(`SELECT COUNT(*) AS count FROM registrations ${where}`).get(params) as { count: number }
-    ).count;
-    const registrations = db
+    const totalRow = (await db.prepare(`SELECT COUNT(*) AS count FROM registrations ${where}`).get(params)) as {
+      count: number;
+    };
+    const registrations = (await db
       .prepare(`SELECT * FROM registrations ${where} ORDER BY created_at DESC LIMIT @limit OFFSET @offset`)
-      .all({ ...params, limit, offset: (page - 1) * limit }) as RegistrationRow[];
+      .all({ ...params, limit, offset: (page - 1) * limit })) as RegistrationRow[];
 
+    const total = Number(totalRow.count);
     res.json({
       registrations,
       total,
@@ -106,10 +107,10 @@ registrationRouter.get(
 
 registrationRouter.delete(
   '/:id',
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, 'Invalid registration.');
-    const result = db.prepare('DELETE FROM registrations WHERE id = ?').run(id);
+    const result = await db.prepare('DELETE FROM registrations WHERE id = ?').run(id);
     if (!result.changes) notFound('Registration not found.');
     res.json({ message: 'Registration removed.' });
   }),

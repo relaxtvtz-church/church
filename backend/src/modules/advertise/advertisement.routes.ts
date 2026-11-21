@@ -18,29 +18,32 @@ export interface AdvertisementRow {
   updated_at: string;
 }
 
-export const getAdvertisement = (): AdvertisementRow =>
-  db.prepare('SELECT * FROM advertisement WHERE id = 1').get() as AdvertisementRow;
+export const getAdvertisement = async (): Promise<AdvertisementRow> =>
+  (await db.prepare('SELECT * FROM advertisement WHERE id = 1').get()) as AdvertisementRow;
 
 export const advertisementRouter = Router();
 
-advertisementRouter.get('/public', (_req, res) => {
-  const ad = getAdvertisement();
-  res.json({
-    title: ad.title,
-    description: ad.description,
-    university: ad.university,
-    image_url: ad.image_url,
-    cta_label: ad.cta_label,
-    is_active: ad.is_active === 1,
-  });
-});
+advertisementRouter.get(
+  '/public',
+  asyncHandler(async (_req, res) => {
+    const ad = await getAdvertisement();
+    res.json({
+      title: ad.title,
+      description: ad.description,
+      university: ad.university,
+      image_url: ad.image_url,
+      cta_label: ad.cta_label,
+      is_active: Number(ad.is_active) === 1,
+    });
+  }),
+);
 
 advertisementRouter.use(requireAuth);
 
 advertisementRouter.get(
   '/',
-  asyncHandler((_req, res) => {
-    res.json({ advertisement: getAdvertisement() });
+  asyncHandler(async (_req, res) => {
+    res.json({ advertisement: await getAdvertisement() });
   }),
 );
 
@@ -60,25 +63,27 @@ const advertisementSchema = z.object({
 advertisementRouter.put(
   '/',
   validate(advertisementSchema),
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const input = req.body as z.infer<typeof advertisementSchema>;
-    const existing = getAdvertisement();
+    const existing = await getAdvertisement();
     const imageUrl = input.imageUrl ?? '/brand/church-banner.jpg';
 
-    db.prepare(
-      `UPDATE advertisement SET title = ?, description = ?, university = ?, image_url = ?,
-       cta_label = ?, is_active = ?, updated_at = ? WHERE id = 1`,
-    ).run(
-      cleanText(input.title, 150),
-      cleanText(input.description, 1000),
-      cleanText(input.university, 250),
-      imageUrl,
-      cleanText(input.ctaLabel, 80) || 'Register your interest',
-      input.isActive === false ? 0 : 1,
-      now(),
-    );
+    await db
+      .prepare(
+        `UPDATE advertisement SET title = ?, description = ?, university = ?, image_url = ?,
+         cta_label = ?, is_active = ?, updated_at = ? WHERE id = 1`,
+      )
+      .run(
+        cleanText(input.title, 150),
+        cleanText(input.description, 1000),
+        cleanText(input.university, 250),
+        imageUrl,
+        cleanText(input.ctaLabel, 80) || 'Register your interest',
+        input.isActive === false ? 0 : 1,
+        now(),
+      );
 
-    if (existing.image_url && existing.image_url !== imageUrl) removeImage(existing.image_url);
-    res.json({ message: 'Advertisement updated. The public website has been refreshed.', advertisement: getAdvertisement() });
+    if (existing.image_url && existing.image_url !== imageUrl) await removeImage(existing.image_url);
+    res.json({ message: 'Advertisement updated. The public website has been refreshed.', advertisement: await getAdvertisement() });
   }),
 );

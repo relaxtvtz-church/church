@@ -10,6 +10,8 @@
   "scripts": {
     "dev": "concurrently -n api,web -c cyan,green \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\"",
     "build": "npm run build --workspace frontend",
+    "build:backend": "tsc -p backend/tsconfig.build.json",
+    "vercel-build": "npm run build && npm run build:backend && node scripts/prepare-vercel.mjs",
     "start": "npm run start --workspace backend",
     "setup": "npm run db:seed --workspace backend",
     "seed:demo": "npm run seed:demo --workspace backend",

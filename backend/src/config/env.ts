@@ -17,6 +17,7 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   isProduction: process.env.NODE_ENV === 'production',
   port: numberFrom(process.env.PORT, 4000),
+  databaseUrl: process.env.DATABASE_URL ?? '',
   dbPath: path.isAbsolute(process.env.DB_PATH ?? './data/church.db')
     ? (process.env.DB_PATH as string)
     : path.join(backendRoot, process.env.DB_PATH ?? './data/church.db'),

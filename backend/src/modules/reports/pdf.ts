@@ -3,6 +3,7 @@ import path from 'node:path';
 import PDFDocument from 'pdfkit';
 import { env } from '../../config/env.js';
 import { theme } from '../../config/theme.js';
+import { getUploadedImage } from '../../middleware/upload.js';
 import { formatDate, RATING_LABELS } from '../../utils/format.js';
 import type { ReviewRow } from '../reviews/reviews.service.js';
 
@@ -12,6 +13,26 @@ const GOLD = theme.secondary;
 const WHITE = theme.white;
 const SOFT = theme.background;
 const MUTED = theme.muted;
+
+const loadLogo = async (logoUrl: string | null): Promise<Buffer | null> => {
+  if (!logoUrl) return null;
+  if (logoUrl.startsWith('/uploads/')) {
+    const file = await getUploadedImage(path.basename(logoUrl));
+    return file?.data ?? null;
+  }
+  if (logoUrl.startsWith('/brand/')) {
+    const filename = path.basename(logoUrl);
+    const candidates = [
+      path.join(env.frontendPublicDir, 'brand', filename),
+      path.join(env.publicDir, 'brand', filename),
+      path.join(path.dirname(env.uploadDir), 'public', 'brand', filename),
+    ];
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) return fs.readFileSync(candidate);
+    }
+  }
+  return null;
+};
 
 export interface ReportData {
   title: string;
@@ -82,18 +103,10 @@ export const buildReportPdf = async (data: ReportData): Promise<Buffer> => {
   };
 
   // Brand header
-  const logoUrl = data.settings.logo_url;
-  let logoPath: string | null = null;
-  if (logoUrl?.startsWith('/uploads/')) {
-    logoPath = path.join(env.uploadDir, path.basename(logoUrl));
-  } else if (logoUrl?.startsWith('/brand/')) {
-    const bundled = path.join(env.frontendPublicDir, path.basename(logoUrl));
-    const built = path.join(env.publicDir, 'brand', path.basename(logoUrl));
-    logoPath = fs.existsSync(bundled) ? bundled : built;
-  }
-  if (logoPath && fs.existsSync(logoPath)) {
+  const logo = await loadLogo(data.settings.logo_url);
+  if (logo) {
     try {
-      doc.image(logoPath, margin, 40, { fit: [52, 52] });
+      doc.image(logo, margin, 40, { fit: [52, 52] });
     } catch {
       drawMark(doc, margin, 40);
     }
@@ -327,18 +340,10 @@ export const buildRegistrationsPdf = async (data: RegistrationReportData): Promi
     y += 12;
   };
 
-  const logoUrl = data.settings.logo_url;
-  let logoPath: string | null = null;
-  if (logoUrl?.startsWith('/uploads/')) {
-    logoPath = path.join(env.uploadDir, path.basename(logoUrl));
-  } else if (logoUrl?.startsWith('/brand/')) {
-    const bundled = path.join(env.frontendPublicDir, path.basename(logoUrl));
-    const built = path.join(env.publicDir, 'brand', path.basename(logoUrl));
-    logoPath = fs.existsSync(bundled) ? bundled : built;
-  }
-  if (logoPath && fs.existsSync(logoPath)) {
+  const logo = await loadLogo(data.settings.logo_url);
+  if (logo) {
     try {
-      doc.image(logoPath, margin, 34, { fit: [48, 48] });
+      doc.image(logo, margin, 34, { fit: [48, 48] });
     } catch {
       drawMark(doc, margin, 34);
     }

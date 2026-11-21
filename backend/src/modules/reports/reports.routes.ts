@@ -12,8 +12,8 @@ import { buildRegistrationsPdf, buildReportPdf } from './pdf.js';
 export const reportsRouter = Router();
 reportsRouter.use(requireAuth);
 
-const getSettings = () =>
-  db.prepare('SELECT church_name, logo_url, location, phone, email FROM church_settings WHERE id = 1').get() as {
+const getSettings = async () =>
+  (await db.prepare('SELECT church_name, logo_url, location, phone, email FROM church_settings WHERE id = 1').get()) as {
     church_name: string;
     logo_url: string | null;
     location: string | null;
@@ -30,7 +30,7 @@ const monthBounds = (month: string): { from: string; to: string } | null => {
   return { from: from.toISOString(), to: to.toISOString() };
 };
 
-const resolveReport = (query: Request['query']) => {
+const resolveReport = async (query: Request['query']) => {
   const type = typeof query.type === 'string' ? query.type : 'all';
   const filters = parseReviewFilters(query);
   let title = 'All Reviews Report';
@@ -39,7 +39,7 @@ const resolveReport = (query: Request['query']) => {
 
   if (type === 'staff') {
     if (!filters.staffId || filters.staffId === -1) throw new ApiError(400, 'Select a staff member for this report.');
-    const staff = db.prepare('SELECT full_name FROM staff WHERE id = ?').get(filters.staffId) as
+    const staff = (await db.prepare('SELECT full_name FROM staff WHERE id = ?').get(filters.staffId)) as
       | { full_name: string }
       | undefined;
     if (!staff) throw new ApiError(400, 'Selected staff member was not found.');
@@ -66,10 +66,10 @@ const resolveReport = (query: Request['query']) => {
     includeWrittenReviews = false;
   }
 
-  const reviews = listReviews(filters).rows;
+  const { rows: reviews } = await listReviews(filters);
   const distribution = [1, 2, 3, 4, 5].map((rating) => ({
     rating,
-    count: reviews.filter((review) => review.rating === rating).length,
+    count: reviews.filter((review) => Number(review.rating) === rating).length,
   }));
   const categories = [...new Set(reviews.map((review) => review.category))]
     .map((category) => {
@@ -77,21 +77,21 @@ const resolveReport = (query: Request['query']) => {
       return {
         category,
         count: matching.length,
-        average: Math.round((matching.reduce((sum, review) => sum + review.rating, 0) / matching.length) * 10) / 10,
+        average: Math.round((matching.reduce((sum, review) => sum + Number(review.rating), 0) / matching.length) * 10) / 10,
       };
     })
     .sort((a, b) => b.count - a.count);
 
-  const allStaff = getStaffRatings();
+  const allStaff = await getStaffRatings();
   const staffSummary = allStaff
     .map((staff) => {
-      const matching = reviews.filter((review) => review.staff_id === staff.id);
+      const matching = reviews.filter((review) => Number(review.staff_id) === Number(staff.id));
       return {
         full_name: staff.full_name,
         position: staff.position,
         total_reviews: matching.length,
         average_rating: matching.length
-          ? Math.round((matching.reduce((sum, review) => sum + review.rating, 0) / matching.length) * 10) / 10
+          ? Math.round((matching.reduce((sum, review) => sum + Number(review.rating), 0) / matching.length) * 10) / 10
           : null,
       };
     })
@@ -104,14 +104,14 @@ const resolveReport = (query: Request['query']) => {
       position: 'Not attributed to an individual',
       total_reviews: general.length,
       average_rating:
-        Math.round((general.reduce((sum, review) => sum + review.rating, 0) / general.length) * 10) / 10,
+        Math.round((general.reduce((sum, review) => sum + Number(review.rating), 0) / general.length) * 10) / 10,
     });
   }
 
   return { title, periodLabel, includeWrittenReviews, reviews, distribution, categories, staffSummary, filters };
 };
 
-const resolveRegistrations = (query: Request['query']) => {
+const resolveRegistrations = async (query: Request['query']) => {
   const search = cleanText(typeof query.search === 'string' ? query.search : '', 120);
   const dateFrom = typeof query.dateFrom === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(query.dateFrom) ? query.dateFrom : '';
   const dateTo = typeof query.dateTo === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(query.dateTo) ? query.dateTo : '';
@@ -133,9 +133,9 @@ const resolveRegistrations = (query: Request['query']) => {
     params.dateTo = `${dateTo}T23:59:59.999Z`;
   }
 
-  const registrations = db
+  const registrations = (await db
     .prepare(`SELECT * FROM registrations ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at DESC`)
-    .all(params) as RegistrationRow[];
+    .all(params)) as RegistrationRow[];
 
   const periodLabel =
     dateFrom || dateTo
@@ -147,8 +147,8 @@ const resolveRegistrations = (query: Request['query']) => {
 
 reportsRouter.get(
   '/registrations/preview',
-  asyncHandler((req, res) => {
-    const { registrations, periodLabel } = resolveRegistrations(req.query);
+  asyncHandler(async (req, res) => {
+    const { registrations, periodLabel } = await resolveRegistrations(req.query);
     res.json({
       total: registrations.length,
       students: registrations.filter((item) => item.status === 'Student').length,
@@ -161,8 +161,8 @@ reportsRouter.get(
 reportsRouter.get(
   '/registrations/pdf',
   asyncHandler(async (req, res) => {
-    const { registrations, search, periodLabel } = resolveRegistrations(req.query);
-    const settings = getSettings();
+    const { registrations, search, periodLabel } = await resolveRegistrations(req.query);
+    const settings = await getSettings();
     const pdf = await buildRegistrationsPdf({
       settings,
       periodLabel,
@@ -179,12 +179,12 @@ reportsRouter.get(
 
 reportsRouter.get(
   '/preview',
-  asyncHandler((req, res) => {
-    const report = resolveReport(req.query);
+  asyncHandler(async (req, res) => {
+    const report = await resolveReport(req.query);
     res.json({
       total: report.reviews.length,
       average: report.reviews.length
-        ? Math.round((report.reviews.reduce((sum, review) => sum + review.rating, 0) / report.reviews.length) * 10) / 10
+        ? Math.round((report.reviews.reduce((sum, review) => sum + Number(review.rating), 0) / report.reviews.length) * 10) / 10
         : 0,
       periodLabel: report.periodLabel,
       title: report.title,
@@ -197,16 +197,17 @@ reportsRouter.get(
 reportsRouter.get(
   '/pdf',
   asyncHandler(async (req, res) => {
-    const report = resolveReport(req.query);
+    const report = await resolveReport(req.query);
+    const settings = await getSettings();
     const pdf = await buildReportPdf({
       title: report.title,
-      subtitle: `${getSettings().church_name} — Ministry Feedback & Staff Review`,
+      subtitle: `${settings.church_name} — Ministry Feedback & Staff Review`,
       periodLabel: report.periodLabel,
       reviews: report.reviews,
       distribution: report.distribution,
       categories: report.categories,
       staffSummary: report.staffSummary,
-      settings: getSettings(),
+      settings,
       includeWrittenReviews: report.includeWrittenReviews,
     });
 

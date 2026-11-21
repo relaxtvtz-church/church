@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { env } from '../config/env.js';
 import { db, now } from './database.js';
 
-const seedDepartments = (): void => {
+const seedDepartments = async (): Promise<void> => {
   const departments = [
     ['Praise team', 'Serving the congregation through praise and worship.'],
     ['Worship team', 'Leading the church into heartfelt worship.'],
@@ -10,49 +10,57 @@ const seedDepartments = (): void => {
     ['Heavenly kids', 'Nurturing children in faith and joy.'],
   ];
   const timestamp = now();
-  const insert = db.prepare(`
-    INSERT INTO staff (full_name, position, ministry, bio, status, created_at, updated_at)
-    SELECT ?, '', 'Department', ?, 'active', ?, ?
-    WHERE NOT EXISTS (SELECT 1 FROM staff WHERE full_name = ?)
-  `);
   for (const [name, bio] of departments) {
-    insert.run(name, bio, timestamp, timestamp, name);
+    const existing = await db.prepare('SELECT id FROM staff WHERE full_name = ?').get(name);
+    if (!existing) {
+      await db
+        .prepare(
+          `INSERT INTO staff (full_name, position, ministry, bio, status, created_at, updated_at)
+           VALUES (?, '', 'Department', ?, 'active', ?, ?)`,
+        )
+        .run(name, bio, timestamp, timestamp);
+    }
   }
 };
 
-export const seed = (): void => {
-  seedDepartments();
+export const seed = async (): Promise<void> => {
+  if (db.isPostgres) await db.initPostgres();
+  await seedDepartments();
 
-  const adminCount = (db.prepare('SELECT COUNT(*) AS count FROM admins').get() as { count: number }).count;
+  const adminCount = (await db.prepare('SELECT COUNT(*) AS count FROM admins').get()) as { count: number };
 
-  if (adminCount === 0) {
+  if (adminCount.count === 0) {
     const passwordHash = bcrypt.hashSync(env.admin.password, 12);
-    db.prepare(
-      'INSERT INTO admins (name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(env.admin.name, env.admin.email.toLowerCase(), passwordHash, 'super_admin', now());
+    await db
+      .prepare('INSERT INTO admins (name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(env.admin.name, env.admin.email.toLowerCase(), passwordHash, 'super_admin', now());
     console.log(`Created admin: ${env.admin.email}`);
   }
 
-  const settingsCount = (
-    db.prepare('SELECT COUNT(*) AS count FROM church_settings WHERE id = 1').get() as { count: number }
-  ).count;
+  const settingsCount = (await db.prepare('SELECT COUNT(*) AS count FROM church_settings WHERE id = 1').get()) as {
+    count: number;
+  };
 
-  if (settingsCount === 0) {
-    db.prepare('INSERT INTO church_settings (id, updated_at) VALUES (1, ?)').run(now());
+  if (settingsCount.count === 0) {
+    await db.prepare('INSERT INTO church_settings (id, updated_at) VALUES (1, ?)').run(now());
     console.log('Created default church settings');
   }
 
-  const advertCount = (
-    db.prepare('SELECT COUNT(*) AS count FROM advertisement WHERE id = 1').get() as { count: number }
-  ).count;
+  const advertCount = (await db.prepare('SELECT COUNT(*) AS count FROM advertisement WHERE id = 1').get()) as {
+    count: number;
+  };
 
-  if (advertCount === 0) {
-    db.prepare('INSERT INTO advertisement (id, updated_at) VALUES (1, ?)').run(now());
+  if (advertCount.count === 0) {
+    await db.prepare('INSERT INTO advertisement (id, updated_at) VALUES (1, ?)').run(now());
     console.log('Created default advertisement');
   }
 };
 
 if (process.argv[1]?.endsWith('seed.ts')) {
-  seed();
-  console.log('Database ready.');
+  seed()
+    .then(() => console.log('Database ready.'))
+    .catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
 }

@@ -12,11 +12,16 @@ uploadsRouter.post('/image', (req: Request, res: Response, next: NextFunction) =
       next(error);
       return;
     }
-    try {
-      if (!req.file) throw new ApiError(400, 'Choose an image to upload.');
-      res.status(201).json({ url: saveImage(req.file), message: 'Image uploaded.' });
-    } catch (uploadError) {
-      next(uploadError);
+    if (!req.file) {
+      next(new ApiError(400, 'Choose an image to upload.'));
+      return;
     }
+    saveImage(req.file)
+      .then((url) => res.status(201).json({ url, message: 'Image uploaded.' }))
+      .catch(next);
   });
+});
+
+uploadsRouter.use((_req, res) => {
+  res.status(404).json({ error: 'Endpoint not found.' });
 });

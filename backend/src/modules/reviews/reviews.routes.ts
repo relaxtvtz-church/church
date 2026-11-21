@@ -25,21 +25,19 @@ reviewsRouter.post(
   '/',
   rateLimit('review-submit', 5, 30 * 60 * 1000),
   validate(createReviewSchema),
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const input = req.body as z.infer<typeof createReviewSchema>;
 
+    let staffName: string | null = null;
     if (input.staffId) {
-      const staff = db
+      const staff = (await db
         .prepare("SELECT full_name FROM staff WHERE id = ? AND status = 'active'")
-        .get(input.staffId) as { full_name: string } | undefined;
+        .get(input.staffId)) as { full_name: string } | undefined;
       if (!staff) throw new ApiError(400, 'The selected staff member is no longer available.');
+      staffName = staff.full_name;
     }
 
-    const staffName = input.staffId
-      ? (db.prepare('SELECT full_name FROM staff WHERE id = ?').get(input.staffId) as { full_name: string }).full_name
-      : null;
-
-    const result = db
+    const result = await db
       .prepare(
         `INSERT INTO reviews (reviewer_name, phone, staff_id, staff_name, category, rating, message, status, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'new', ?)`,
@@ -55,13 +53,13 @@ reviewsRouter.post(
         now(),
       );
 
-    const { church_name } = db
-      .prepare('SELECT church_name FROM church_settings WHERE id = 1')
-      .get() as { church_name: string };
+    const settings = (await db.prepare('SELECT church_name FROM church_settings WHERE id = 1').get()) as {
+      church_name: string;
+    };
 
     res.status(201).json({
       id: Number(result.lastInsertRowid),
-      message: `Thank you for sharing your experience with ${church_name}. Your feedback has been received and is appreciated.`,
+      message: `Thank you for sharing your experience with ${settings.church_name}. Your feedback has been received and is appreciated.`,
     });
   }),
 );
@@ -69,11 +67,11 @@ reviewsRouter.post(
 reviewsRouter.get(
   '/',
   requireAuth,
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const filters = parseReviewFilters(req.query);
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
-    const { rows, total } = listReviews(filters, { page, limit });
+    const { rows, total } = await listReviews(filters, { page, limit });
     res.json({ reviews: rows, total, page, limit, pages: Math.max(1, Math.ceil(total / limit)) });
   }),
 );
@@ -81,8 +79,8 @@ reviewsRouter.get(
 reviewsRouter.get(
   '/:id',
   requireAuth,
-  asyncHandler((req, res) => {
-    const review = getReview(Number(req.params.id));
+  asyncHandler(async (req, res) => {
+    const review = await getReview(Number(req.params.id));
     if (!review) throw new ApiError(404, 'Review not found.');
     res.json({ review });
   }),
@@ -94,19 +92,19 @@ reviewsRouter.patch(
   '/:id/status',
   requireAuth,
   validate(statusSchema),
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    const result = db.prepare('UPDATE reviews SET status = ? WHERE id = ?').run(req.body.status, id);
+    const result = await db.prepare('UPDATE reviews SET status = ? WHERE id = ?').run(req.body.status, id);
     if (!result.changes) throw new ApiError(404, 'Review not found.');
-    res.json({ review: getReview(id) });
+    res.json({ review: await getReview(id) });
   }),
 );
 
 reviewsRouter.delete(
   '/:id',
   requireAuth,
-  asyncHandler((req, res) => {
-    const result = db.prepare('DELETE FROM reviews WHERE id = ?').run(Number(req.params.id));
+  asyncHandler(async (req, res) => {
+    const result = await db.prepare('DELETE FROM reviews WHERE id = ?').run(Number(req.params.id));
     if (!result.changes) throw new ApiError(404, 'Review not found.');
     res.json({ message: 'Review deleted.' });
   }),

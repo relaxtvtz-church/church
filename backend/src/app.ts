@@ -14,11 +14,12 @@ import { reviewsRouter } from './modules/reviews/reviews.routes.js';
 import { settingsRouter } from './modules/settings/settings.routes.js';
 import { staffRouter } from './modules/staff/staff.routes.js';
 import { statsRouter } from './modules/stats/stats.routes.js';
+import { getUploadedImage } from './middleware/upload.js';
 import { uploadsRouter } from './modules/uploads/uploads.routes.js';
 import { advertisementRouter } from './modules/advertise/advertisement.routes.js';
 import { registrationRouter } from './modules/advertise/registrations.routes.js';
 
-seed();
+export const ready = seed();
 
 export const app = express();
 
@@ -35,6 +36,22 @@ app.use(cors({ origin: env.allowedOrigin, credentials: true }));
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use(attachAdmin);
+
+app.get('/uploads/:filename', async (req, res, next) => {
+  try {
+    const file = await getUploadedImage(req.params.filename);
+    if (file) {
+      res.setHeader('Content-Type', file.mime_type);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.send(file.data);
+      return;
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.use(
   '/uploads',
